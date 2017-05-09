@@ -1,3 +1,7 @@
+## stuff added beyond boilerplate
+*.err
+
+## boilerplate code below
 autograder/
 .skeleton
 

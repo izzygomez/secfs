@@ -127,7 +127,26 @@ def _create(parent_i, name, create_as, create_for, isdir):
     #    given name
     #
     # Also make sure that you *return the final i* for the new inode!
-    return I(User(0), 0)
+
+    # store newly created inode on server & map block
+    ihash1 = secfs.store.block.store(node.bytes())
+    i = secfs.tables.modmap(create_as, I(create_as), ihash1)
+    if i == None:
+        raise RuntimeError
+    # create "." & ".." if isdir
+    if isdir:
+        ihash2 = secfs.store.tree.add(i, b'.', i)
+        secfs.tables.modmap(create_as, i, ihash2)
+        ihash3 = secfs.store.tree.add(i, b'..', parent_i)
+        secfs.tables.modmap(create_as, i, ihash3)
+    # create group i and point to user i
+    if create_for.is_group():
+        group_i = secfs.tables.modmap(create_as, I(create_for), i)
+        link(create_as, group_i, parent_i, name)
+        return group_i
+    link(create_as, i, parent_i, name)
+    return i
+    # return I(User(0), 0)
 
 def create(parent_i, name, create_as, create_for):
     """
