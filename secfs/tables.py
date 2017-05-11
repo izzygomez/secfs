@@ -12,6 +12,10 @@ from secfs.types import I, Principal, User, Group
 # current_itables represents the current view of the file system's itables
 current_itables = {}
 
+# The VSL will be downloaded from the server, modified and sent back to support
+# multiple users
+vsl = None
+
 # a server connection handle is passed to us at mount time by secfs-fuse
 server = None
 def register(_server):

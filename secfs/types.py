@@ -103,3 +103,64 @@ class VS:
         #Signature of user
         self.signature = None
 
+class VSL:
+    def __init__(self):
+        # List of VS's keyed by principal
+        self.vsl = {}
+
+    # Fetch the current VS for a specified user
+    def fetch_VS(self, principal):
+        return self.vsl[principal]
+
+    def update_VS(principal, vs):
+        #TODO: sign VS before updating
+        #TODO: check for prev <= current
+        self.vsl[principal] = vsl
+
+    def update_list(self, mod_as, principal, mod_as_ihandle, group_ihandle=None):
+        new_VS = VS() # a new VS to store into
+
+        # Check to see if the principal is a group or user
+        group = False
+        if principal.is_group():
+            group = True
+
+        # If we don't have an entry for the mod_as, add one
+        if mod_as not in self.vsl.keys():
+            self.vsl[mod_as] = VS()
+
+        # Find the most updated version list across all VS's by finding the VS with the
+        # most recent version of each i-handle
+        highest = -1
+        best_vect = None
+
+        for p in self.vsl.keys():
+            vect = self.vsl[p]
+
+            #sum the version numbers to find the aggregate amount of changes encapsulated
+            # in the version vector
+            total = sum(vect.v_vect.values())
+
+            if total > highest:
+                highest = total
+                best_vect = vect
+
+
+        new_VS.ihandle = mod_as_ihandle
+        new_VS.group_ihandle = best_vect
+        new_vector = best_vec
+
+        # Check if this is our first time modifying this principal's itable
+        if principal not in new_vector:
+            new_vector[principal] = 0
+        new_vecor[principal] += 1
+
+        if group:
+            new_vector.group_ihandle[principal] = group_ihandle
+
+        new_VS.v_vect = new_vector
+
+        update_VS(principal, new_VS)
+
+        
+
