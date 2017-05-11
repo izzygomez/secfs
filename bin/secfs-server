@@ -16,6 +16,7 @@ class SecFSRPC():
                 # chash => block
         }
 
+        self.vsl_hash = None
     @Pyro4.expose
     def lock(self):
         # global client lock
@@ -62,6 +63,23 @@ class SecFSRPC():
         self.blocks[chash] = blob
         return chash
 
+    @Pyro4.expose
+    def update_VSL(vsl):
+	import base64
+	import pickle
+	pickled_vsl = pickle.dumps(vsl)
+	enc_pickled_vsl = base64.b64encode(pickled_vsl)
+	blob = {"data": enc_pickled_vsl}
+	c_hash = self.store(blob)
+	self.vsl_hash = c_hash
+	return c_hash
+
+    @Pyro4.expose
+    def retrieve_VSL()
+	import pickle:
+	pickeld_vsl = self.read(self.vsl_hash)
+	vsl = pickle.loads(pickled_vsl)
+	return vsl
 import sys
 if len(sys.argv) != 2:
     raise SystemExit('Usage: %s <server-socket>' % sys.argv[0])
