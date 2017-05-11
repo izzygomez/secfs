@@ -7,7 +7,7 @@
 import pickle
 import secfs.store
 import secfs.fs
-from secfs.types import I, Principal, User, Group
+from secfs.types import I, Principal, User, Group, VS, VSL
 
 # current_itables represents the current view of the file system's itables
 current_itables = {}
@@ -28,6 +28,31 @@ def pre(refresh, user):
     an exclusive server lock.
     """
 
+    # Firt retrieve the VSL from the server
+    global vsl
+    raw_vsl = server.retrieve_VSL()
+
+    if raw_vsl == None:
+        # We're the first user to edit the fs
+        # Need to create the VS
+        vsl = VSL()
+        secfs.fs.root_i = I(user, inumber = 0)
+        return
+
+    vsl = VSL(raw_vsl)
+    # Load user I-tables into current i-tables list
+    global current_itables
+    for user in vsl.vsl.keys():
+        vs = vsl.fetch_VS(user)
+        current_itables[user] = Itable.load(vs.ihandle)
+
+    # Load group I-tables into current i-tables list
+    handles = vsl.find_group_versions()
+    for g in handles:
+        current_itables[g] = handles[g]
+
+    #print("Current I-Tables: {}".format(current_itables))
+
     if refresh != None:
         # refresh usermap and groupmap
         refresh()
@@ -39,6 +64,8 @@ def post(push_vs):
         # put your post() code instead of "pass" below.
         return
     pass
+    global vsl
+    server.update_VSL(vsl.vsl)
 
 class Itable:
     """

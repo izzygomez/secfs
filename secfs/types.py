@@ -104,9 +104,9 @@ class VS:
         self.signature = None
 
 class VSL:
-    def __init__(self):
+    def __init__(self, p_vsl={}):
         # List of VS's keyed by principal
-        self.vsl = {}
+        self.vsl = p_vsl
 
     # Fetch the current VS for a specified user
     def fetch_VS(self, principal):
@@ -116,6 +116,20 @@ class VSL:
         #TODO: sign VS before updating
         #TODO: check for prev <= current
         self.vsl[principal] = vsl
+
+    def find_group_versions(self):
+        ret_versions = {}
+        ret_handles = {}
+        for vs in self.vsl.values():
+            for g in vs.group_ihandle:
+                g_version = vs.v_vect[g]
+                g_handle = group_ihandle[g]
+
+                if g_version > ret_versions[g] or g not in ret_versions:
+                    # THis is a more current version than the one we have stored
+                    ret_versions[g] = g_version
+                    ret_handles[g] = g_handle
+        return ret_handles
 
     def update_list(self, mod_as, principal, mod_as_ihandle, group_ihandle=None):
         new_VS = VS() # a new VS to store into
