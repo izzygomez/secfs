@@ -87,3 +87,19 @@ class I:
         if not self.allocated():
             raise TypeError("cannot hash unallocated i {}".format(self))
         return hash((self._p, self._n))
+
+class VS:
+    def __init__(self):
+        # The i-handle of the VS user
+        self.ihandle = None;
+
+        #List of group i-handles for the user
+        self.group_ihandle = {}
+
+        #version vector
+        #Dictionary of version numbers of users an groups as last seen by the user
+        self.v_vect = {}
+
+        #Signature of user
+        self.signature = None
+
