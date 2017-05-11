@@ -143,12 +143,12 @@ class VSL:
 
             if total > highest:
                 highest = total
-                best_vect = vect
+                best_vect = vect.v_vect
 
 
         new_VS.ihandle = mod_as_ihandle
-        new_VS.group_ihandle = best_vect
-        new_vector = best_vec
+        new_VS.group_ihandle = self.vsl[mod_as].group_ihandle
+        new_vector = best_vect
 
         # Check if this is our first time modifying this principal's itable
         if principal not in new_vector:
