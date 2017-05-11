@@ -65,22 +65,26 @@ class SecFSRPC():
 
     @Pyro4.expose
     def update_VSL(self,vsl):
-        import base64
-        import pickle
-        pickled_vsl = pickle.dumps(vsl)
-        enc_pickled_vsl = base64.b64encode(pickled_vsl)
-        blob = {"data": enc_pickled_vsl}
-        c_hash = self.store(blob)
-        self.vsl_hash = c_hash
-        return c_hash
+        #import base64
+        #import pickle
+        #pickled_vsl = pickle.dumps(vsl)
+        #enc_pickled_vsl = base64.b64encode(pickled_vsl)
+        #blob = {"data": enc_pickled_vsl}
+        self.blocks['vsl'] = vsl
+        #c_hash = self.store(vsl)
+        #self.vsl_hash = c_hash
+        #return c_hash
 
     @Pyro4.expose
     def retrieve_VSL(self):
-        import pickle
-        pickled_vsl = self.read(self.vsl_hash)
-        if pickled_vsl is None:
-            return None
-        vsl = pickle.loads(pickled_vsl)
+        #import pickle
+        if 'vsl' in self.blocks.keys():
+            return self.blocks['vsl']
+        return None
+        #vsl = self.read(self.vsl_hash)
+        #if vsl is None:
+            #return None
+        #vsl = pickle.loads(pickled_vsl)
         
         return vsl
 import sys

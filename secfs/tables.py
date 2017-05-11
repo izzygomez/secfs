@@ -4,7 +4,9 @@
 # NOTE: an ihandle is the hash of a principal's itable, which holds that
 # principal's mapping from inumbers (the second part of an i) to inode hashes.
 
+import base64
 import pickle
+import sys
 import secfs.store
 import secfs.fs
 from secfs.types import I, Principal, User, Group, VS, VSL
@@ -30,16 +32,19 @@ def pre(refresh, user):
 
     # Firt retrieve the VSL from the server
     global vsl
-    raw_vsl = server.retrieve_VSL()
+    vsl = server.retrieve_VSL()
 
-    if raw_vsl == None:
+    if vsl == None: #or raw_vsl == {}:
         # We're the first user to edit the fs
         # Need to create the VS
         vsl = VSL()
         secfs.fs.root_i = I(user, inumber = 0)
         return
 
-    vsl = VSL(raw_vsl)
+    vsl = base64.b64decode(vsl["data"])
+    vsl = pickle.loads(vsl)
+    #vsl = VSL(raw_vsl)
+    #vsl.deserialize()
     # Load user I-tables into current i-tables list
     global current_itables
     for user in vsl.vsl.keys():
@@ -49,9 +54,10 @@ def pre(refresh, user):
     # Load group I-tables into current i-tables list
     handles = vsl.find_group_versions()
     for g in handles:
-        current_itables[g] = handles[g]
+        current_itables[g] = Itable.load(handles[g])
 
-    #print("Current I-Tables: {}".format(current_itables))
+    print("Current I-Tables: {}".format(current_itables))
+    sys.stdout.flush()
 
     if refresh != None:
         # refresh usermap and groupmap
@@ -63,9 +69,11 @@ def post(push_vs):
         # you will probably want to leave this here and
         # put your post() code instead of "pass" below.
         return
-    pass
+    
     global vsl
-    server.update_VSL(vsl.vsl)
+    #vsl.serialize()
+    pick = pickle.dumps(vsl)
+    server.update_VSL(pick)
 
 class Itable:
     """
@@ -211,4 +219,12 @@ def modmap(mod_as, i, ihash):
         print("mapping", i.n, "for group", i.p, "into", t.mapping)
     t.mapping[i.n] = ihash # for groups, ihash is an i
     current_itables[i.p] = t
+
+    itable_hash = secfs.store.block.store(t.bytes())
+    if not i.p.is_group():
+        global vsl
+        vsl.update_list(i.p, i.p, itable_hash)
+    else:
+        user_itable_hash = secfs.store.block.store(current_itables[mod_as].bytes())
+        vsl.update_list(mod_as, i.p, user_itable_hash, group_ihandle=itable_hash)
     return i

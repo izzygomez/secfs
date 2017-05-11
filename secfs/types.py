@@ -102,6 +102,11 @@ class VS:
 
         #Signature of user
         self.signature = None
+    
+    def serialize(self):
+        l = [self.ihandle, self.group_ihandle, self.v_vect, self.signature]
+        import pickle
+        return pickle.dumps(l)
 
 class VSL:
     def __init__(self, p_vsl={}):
@@ -112,10 +117,28 @@ class VSL:
     def fetch_VS(self, principal):
         return self.vsl[principal]
 
-    def update_VS(principal, vs):
+    def update_VS(self, principal, vsl):
         #TODO: sign VS before updating
         #TODO: check for prev <= current
         self.vsl[principal] = vsl
+
+    def serialize(self):
+        for key in self.vsl.keys():
+            vs = self.vsl[key]
+            ser = vs.serialize()
+            self.vsl[key] = ser
+    def deserialize(self):
+        import pickle
+        for key in self.vsl.keys():
+            j_info = self.vsl[key]
+            info = json.loads(j_info)
+            new_VS = VS()
+            new_VS.ihandle = info[0]
+            new_VS.group_ihandle = info[1]
+            new_VS.v_vect = info[2]
+            new_VS.signature = info[3]
+            self.vsl[key] = new_VS
+
 
     def find_group_versions(self):
         ret_versions = {}
@@ -123,9 +146,9 @@ class VSL:
         for vs in self.vsl.values():
             for g in vs.group_ihandle:
                 g_version = vs.v_vect[g]
-                g_handle = group_ihandle[g]
+                g_handle = vs.group_ihandle[g]
 
-                if g_version > ret_versions[g] or g not in ret_versions:
+                if g not in ret_versions or g_version > ret_versions[g]:
                     # THis is a more current version than the one we have stored
                     ret_versions[g] = g_version
                     ret_handles[g] = g_handle
@@ -167,14 +190,14 @@ class VSL:
         # Check if this is our first time modifying this principal's itable
         if principal not in new_vector:
             new_vector[principal] = 0
-        new_vecor[principal] += 1
+        new_vector[principal] += 1
 
         if group:
-            new_vector.group_ihandle[principal] = group_ihandle
+            new_VS.group_ihandle[principal] = group_ihandle
 
         new_VS.v_vect = new_vector
 
-        update_VS(principal, new_VS)
+        self.update_VS(principal, new_VS)
 
         
 
