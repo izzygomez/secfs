@@ -1,4 +1,8 @@
 #!/bin/sh
+
+## added extra stuff
+rm *.err *.log
+
 base=$(dirname "$0")
 cd "$base" || exit 1
 
