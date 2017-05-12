@@ -84,3 +84,56 @@ def generate_key(user):
        encoding=serialization.Encoding.PEM,
        format=serialization.PublicFormat.SubjectPublicKeyInfo
     )
+
+## functionality to support the cryptographic
+## signing and verification of VSes
+def sign(private_key, data):
+    signer = private_key.signer(
+        padding.PSS(
+            mgf=padding.MGF1(hashes.SHA256()),
+            salt_length=padding.PSS.MAX_LENGTH
+        ),
+        hashes.SHA256()
+    )
+    signer.update(data)
+    return signer.finalize()
+
+def verify(public_key, sig, data):
+    verifier = public_key.verifier(
+        sig,
+        padding.PSS(
+            mgf=padding.MGF1(hashes.SHA256()),
+            salt_length=padding.PSS.MAX_LENGTH
+        ),
+        hashes.SHA256()
+    )
+    verifier.update(data)
+
+    #TODO figure out why verifier.verify() fails?
+    try:
+        b = verifier.verify()
+    except:
+        return False
+    return True # verify() worked
+
+def encrypt_asym(public_key, data):
+    # construct ciphertext with padding & return
+    return public_key.encrypt(
+        data,
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=SHA1()),
+            algorithm=hashes.SHA1(),
+            label=None
+        )
+    )
+
+def decrypt_asym(private_key, data):
+    # decrypt into plaintext & return
+    return private_key.decrypt(
+        data,
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA1()),
+            algorithm=hashes.SHA1(),
+            label=None
+        )
+    )
