@@ -201,5 +201,29 @@ class VSL:
 
         self.update_VS(principal, new_VS)
 
-        
+### necessary packages for crypto-related functionality for
+### this symmetric key store class
+from cryptography.fernet import Fernet
+import secfs.crypto
+from cryptography.hazmat.primitives.serialization import load_pem_public_key
+from cryptography.hazmat.backends import default_backend
 
+class SymmetricKeyStore:
+    def __init__(self, users, groups):
+        """
+        users: a dict mapping users -> public keys
+        groups: a dict mapping groups -> list of users
+        """
+        # deserialize public key from PEM encoded data
+        for u in users:
+            users[u] = load_pem_public_key(users[u], backend=default_backend())
+
+        # assign users keys
+        self.users = {user: secfs.crypto.encrypt_asym(users[u], Fernet.generate_key()) for user in users}
+
+        # assign groups keys
+        self.groups = {}
+        for group in groups:
+            group_key = Fernet.generate_key()
+            self.groups[group] = {user: secfs.crypto.encrypt_asym(users[user], group_key)
+                                  for user in groups[group]}
