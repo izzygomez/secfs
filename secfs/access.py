@@ -5,7 +5,14 @@ def can_read(user, i):
     """
     Returns True if the given user can read the given i.
     """
-    return True
+    #Users should be able to read unencrypted files
+    i_node = secfs.fs.get_inode(i)
+    if not i_node.encrypt:
+        return True
+
+    #Users who own files or belong to the same group shouldbe able to read
+    #Same logic as in can_write
+    return can_write(user, i)
 
 def can_write(user, i):
     """

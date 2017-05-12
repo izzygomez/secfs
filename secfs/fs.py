@@ -9,7 +9,7 @@ import secfs.store.block
 from secfs.store.inode import Inode
 from secfs.store.tree import Directory
 from cryptography.fernet import Fernet
-from secfs.types import I, Principal, User, Group
+from secfs.types import I, Principal, User, Group, SymmetricKeyStore
 
 # usermap contains a map from user ID to their public key according to /.users
 usermap = {}
@@ -81,7 +81,7 @@ def init(owner, users, groups):
 
     return root_i
 
-def _create(parent_i, name, create_as, create_for, isdir):
+def _create(parent_i, name, create_as, create_for, isdir, encrypted=False):
     """
     _create allocates a new file, and links it into the directory at parent_i
     with the given name. The new file is owned by create_for, but is created
@@ -108,7 +108,7 @@ def _create(parent_i, name, create_as, create_for, isdir):
         else:
             raise PermissionError("cannot create in user-writeable directory {0} as {1}".format(parent_i, create_as))
 
-    node = Inode()
+    node = Inode(encrypted)
     node.ctime = time.time()
     node.mtime = node.ctime
     node.kind = 0 if isdir else 1
@@ -148,21 +148,21 @@ def _create(parent_i, name, create_as, create_for, isdir):
     return i
     # return I(User(0), 0)
 
-def create(parent_i, name, create_as, create_for):
+def create(parent_i, name, create_as, create_for, encrypted=False):
     """
     Create a new file.
     See secfs.fs._create
     """
-    return _create(parent_i, name, create_as, create_for, False)
+    return _create(parent_i, name, create_as, create_for, False, encrypted=False)
 
-def mkdir(parent_i, name, create_as, create_for):
+def mkdir(parent_i, name, create_as, create_for, encrypted=False):
     """
     Create a new directory.
     See secfs.fs._create
     """
-    return _create(parent_i, name, create_as, create_for, True)
+    return _create(parent_i, name, create_as, create_for, True, encrypted=False)
 
-def read(read_as, i, off, size):
+def read(read_as, i, off, size, decryption_key=None):
     """
     Read reads [off:off+size] bytes from the file at i.
     """
@@ -177,9 +177,18 @@ def read(read_as, i, off, size):
         else:
             raise PermissionError("cannot read from user-readable file {0} as {1}".format(i, read_as))
 
-    return get_inode(i).read()[off:off+size]
+    node = get_inode(i)
+    if node.encrypt and not decryption_key:
+        raise PermissionError("cannot read encrypted file {0} as {1} without decryption key".format(i, write_as))
 
-def write(write_as, i, off, buf):
+    contents = node.read()
+    #Decrypt the file if necessary
+    if node.encrypt:
+        contents = secfs.crypto.decrypt_sym(decryption_key, contents)
+
+    return contents[off:off+size]
+
+def write(write_as, i, off, buf, encryption_key=None):
     """
     Write writes the given bytes into the file at i at the given offset.
     """
@@ -195,16 +204,27 @@ def write(write_as, i, off, buf):
             raise PermissionError("cannot write to user-owned file {0} as {1}".format(i, write_as))
 
     node = get_inode(i)
+    if node.encrypt and not encryption_key:
+        raise PermissionError("cannot write to encrypted file {0} as {1} without encryption key".format(i, write_as))
+
 
     # TODO: this is obviously stupid -- should not get rid of blocks that haven't changed
     bts = node.read()
 
+    #Decrpyt the data if necessary
+    if node.encrypt and len(bts) > 0:
+        #First need to decrypt the file
+        bts = secfs.crypto.decrpyt_sym(encryption_key, bts) 
     # write also allows us to extend a file
     if off + len(buf) > len(bts):
         bts = bts[:off] + buf
     else:
         bts = bts[:off] + buf + bts[off+len(buf):]
 
+
+    #Encrpyt data if necessary
+    if node.encrypt:
+        bts = secfs.crypto.encrypt_sym(encryption_key, bts)
     # update the inode
     node.blocks = [secfs.store.block.store(bts)]
     node.mtime = time.time()
