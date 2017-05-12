@@ -89,9 +89,12 @@ class I:
         return hash((self._p, self._n))
 
 class VS:
-    def __init__(self):
+    def __init__(self, user=None):
         # The i-handle of the VS user
         self.ihandle = None;
+
+        # The User's identifier
+        self.user = user
 
         #List of group i-handles for the user
         self.group_ihandle = {}
