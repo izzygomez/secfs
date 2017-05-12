@@ -122,11 +122,13 @@ class VSL:
         #TODO: check for prev <= current
         self.vsl[principal] = vsl
 
+    ## TODO figure out if we still need this function?
     def serialize(self):
         for key in self.vsl.keys():
             vs = self.vsl[key]
             ser = vs.serialize()
             self.vsl[key] = ser
+    ## TODO figure out if we still need this function?
     def deserialize(self):
         import pickle
         for key in self.vsl.keys():

@@ -41,10 +41,10 @@ def pre(refresh, user):
         secfs.fs.root_i = I(user, inumber = 0)
         return
 
+    # decode vsl and get to sensible format
     vsl = base64.b64decode(vsl["data"])
     vsl = pickle.loads(vsl)
-    #vsl = VSL(raw_vsl)
-    #vsl.deserialize()
+
     # Load user I-tables into current i-tables list
     global current_itables
     for user in vsl.vsl.keys():
@@ -55,9 +55,6 @@ def pre(refresh, user):
     handles = vsl.find_group_versions()
     for g in handles:
         current_itables[g] = Itable.load(handles[g])
-
-    print("Current I-Tables: {}".format(current_itables))
-    sys.stdout.flush()
 
     if refresh != None:
         # refresh usermap and groupmap
@@ -71,9 +68,8 @@ def post(push_vs):
         return
     
     global vsl
-    #vsl.serialize()
-    pick = pickle.dumps(vsl)
-    server.update_VSL(pick)
+    pickled = pickle.dumps(vsl)
+    server.update_VSL(pickled)
 
 class Itable:
     """
