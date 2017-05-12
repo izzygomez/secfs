@@ -73,6 +73,14 @@ class SecFSRPC():
             return self.blocks['vsl']
         return None
 
+    @Pyro4.expose
+    def update_SKS(self, sks):
+        self.blocks['sks'] = sks
+
+    @Pyro4.expose
+    def retrieve_SKS(self):
+        return self.blocks['sks']
+
 import sys
 if len(sys.argv) != 2:
     raise SystemExit('Usage: %s <server-socket>' % sys.argv[0])
