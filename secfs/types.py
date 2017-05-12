@@ -106,10 +106,6 @@ class VS:
         #Signature of user
         self.signature = None
     
-    def serialize(self):
-        l = [self.ihandle, self.group_ihandle, self.v_vect, self.signature]
-        import pickle
-        return pickle.dumps(l)
 
 class VSL:
     def __init__(self, p_vsl={}):
@@ -120,10 +116,19 @@ class VSL:
     def fetch_VS(self, principal):
         return self.vsl[principal]
 
-    def update_VS(self, principal, vsl):
-        #TODO: sign VS before updating
-        #TODO: check for prev <= current
-        self.vsl[principal] = vsl
+    def update_VS(self, principal, vs):
+        # sign VS before updating
+        import pickle
+        key = secfs.crypto.keys[vs.user]
+        vs.signature = secfs.crypto.sign(key, pickle.dumps(vs))
+        # check for prev <= current
+        old_vs = VS()
+        if principal in self.vsl.keys():
+            old_vs = self.vsl[principal]
+        old_total = sum(old_vs.v_vect.values())
+        new_total = sum(vs.v_vect.values())
+        assert new_total >= old_total
+        self.vsl[principal] = vs
 
     ## TODO figure out if we still need this function?
     def serialize(self):
@@ -131,19 +136,6 @@ class VSL:
             vs = self.vsl[key]
             ser = vs.serialize()
             self.vsl[key] = ser
-    ## TODO figure out if we still need this function?
-    def deserialize(self):
-        import pickle
-        for key in self.vsl.keys():
-            j_info = self.vsl[key]
-            info = json.loads(j_info)
-            new_VS = VS()
-            new_VS.ihandle = info[0]
-            new_VS.group_ihandle = info[1]
-            new_VS.v_vect = info[2]
-            new_VS.signature = info[3]
-            self.vsl[key] = new_VS
-
 
     def find_group_versions(self):
         ret_versions = {}
@@ -201,6 +193,7 @@ class VSL:
             new_VS.group_ihandle[principal] = group_ihandle
 
         new_VS.v_vect = new_vector
+        new_VS.user = mod_as
 
         self.update_VS(principal, new_VS)
 
