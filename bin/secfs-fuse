@@ -12,7 +12,8 @@ from llfuse import FUSEError
 import secfs.access
 import secfs.store
 import secfs.fs
-from secfs.types import I, Principal, User, Group
+from secfs.types import I, Principal, User, Group, SymmetricKeyStore
+import base64
 
 # Welcome to the SecFS secure file system.
 # This is the main entry point for all FUSE file system operations.
@@ -211,10 +212,19 @@ class SecFS(llfuse.Operations):
             # initialize a new share, and tell the server about it. don't
             # refresh the user and group maps, as they have not yet been built.
             self._pre(mounter, False)
+
+            users = {u: secfs.crypto.generate_key(u) for u in secfs.crypto.keys}
+            groups = {Group(100): [u for u in secfs.crypto.keys if u.id != 666]}
             root = secfs.fs.init(mounter,
-                {u: secfs.crypto.generate_key(u) for u in secfs.crypto.keys},
-                {Group(100): [u for u in secfs.crypto.keys if u.id != 666]}
+                users,
+                groups
             )
+
+            ## new code -- trying to get crypto to work
+            # initialize a Symmetric Key Store
+            sks = SymmetricKeyStore(users, groups)
+            self.server.update_SKS(pickle.dumps(sks))
+
             self.server.create(self.share, root)
             self._post()
 
