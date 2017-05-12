@@ -121,7 +121,7 @@ def encrypt_asym(public_key, data):
     return public_key.encrypt(
         data,
         padding.OAEP(
-            mgf=padding.MGF1(algorithm=SHA1()),
+            mgf=padding.MGF1(algorithm=hashes.SHA1()),
             algorithm=hashes.SHA1(),
             label=None
         )
