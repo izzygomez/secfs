@@ -88,6 +88,12 @@ class I:
             raise TypeError("cannot hash unallocated i {}".format(self))
         return hash((self._p, self._n))
 
+
+## import stuff for VS and VSL
+import copy, base64, pickle
+import secfs.fs
+import secfs.crypto
+
 class VS:
     def __init__(self, user=None):
         # The i-handle of the VS user
@@ -110,7 +116,10 @@ class VS:
 class VSL:
     def __init__(self, p_vsl={}):
         # List of VS's keyed by principal
-        self.vsl = p_vsl
+        if type(p_vsl) is dict:
+            self.vsl = p_vsl
+        else:
+            self.vsl = {}
 
     # Fetch the current VS for a specified user
     def fetch_VS(self, principal):
@@ -196,7 +205,25 @@ class VSL:
         new_VS.user = mod_as
 
         self.update_VS(principal, new_VS)
+    
+    def updateSignedVSL(self, user, vs):
+        key = secfs.crypto.keys[user]
+        pickled_vs = pickle.dumps(vs)
+        signature = secfs.crypto.sign(key, pickled_vs)
+        self.vsl[user] = (signature, pickled_vs)
 
+    def generateUnsignedVSL(self):
+        vsl = VSL()
+        for user in self.vsl.keys():
+            (signature, pickled_vs) = self.vsl[user]
+            if user in secfs.fs.usermap:
+                pubkey = secfs.fs.usermap[user]
+                if not secfs.crypto.verify(pubkey, signature, pickled_vs):
+                    raise RuntimeError("bad signature on VS of: {}".format(user))
+            vs = pickle.loads(pickled_vs)
+            vsl.vsl[user] = vs
+        return vsl
+        
 ### necessary packages for crypto-related functionality for
 ### this symmetric key store class
 from cryptography.fernet import Fernet

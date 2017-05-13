@@ -129,11 +129,14 @@ def encrypt_asym(public_key, data):
 
 def decrypt_asym(private_key, data):
     # decrypt into plaintext & return
-    return private_key.decrypt(
-        data,
-        padding.OAEP(
-            mgf=padding.MGF1(algorithm=hashes.SHA1()),
-            algorithm=hashes.SHA1(),
-            label=None
+    try:
+        return private_key.decrypt(
+            data,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA1()),
+                algorithm=hashes.SHA1(),
+                label=None
+            )
         )
-    )
+    except:
+            return None

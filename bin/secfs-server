@@ -81,6 +81,11 @@ class SecFSRPC():
     def retrieve_SKS(self):
         return self.blocks['sks']
 
+    @Pyro4.expose
+    def free(self, ihash):
+        if ihash in self.blocks:
+            del self.blocks[ihash]
+
 import sys
 if len(sys.argv) != 2:
     raise SystemExit('Usage: %s <server-socket>' % sys.argv[0])

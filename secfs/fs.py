@@ -20,6 +20,11 @@ owner = None
 # root_i is the i of the root of the current share
 root_i = None
 
+server = None
+def register(_server):
+    global server
+    server = _server
+
 def get_inode(i):
     """
     Shortcut for retrieving an inode given its i.
@@ -81,7 +86,7 @@ def init(owner, users, groups):
 
     return root_i
 
-def _create(parent_i, name, create_as, create_for, isdir, encrypted=False):
+def _create(parent_i, name, create_as, create_for, isdir, encrypted=False, symm_key=None):
     """
     _create allocates a new file, and links it into the directory at parent_i
     with the given name. The new file is owned by create_for, but is created
@@ -114,6 +119,8 @@ def _create(parent_i, name, create_as, create_for, isdir, encrypted=False):
     node.kind = 0 if isdir else 1
     node.ex = isdir
 
+    parent_node = get_inode(parent_i)
+
     # FIXME
     #
     # Here, you will need to:
@@ -135,32 +142,38 @@ def _create(parent_i, name, create_as, create_for, isdir, encrypted=False):
         raise RuntimeError
     # create "." & ".." if isdir
     if isdir:
-        ihash2 = secfs.store.tree.add(i, b'.', i)
+        ihash2 = secfs.store.tree.add(i, b'.', symm_key)
         secfs.tables.modmap(create_as, i, ihash2)
-        ihash3 = secfs.store.tree.add(i, b'..', parent_i)
+        ihash3 = secfs.store.tree.add(i, b'..', symm_key)
         secfs.tables.modmap(create_as, i, ihash3)
     # create group i and point to user i
     if create_for.is_group():
         group_i = secfs.tables.modmap(create_as, I(create_for), i)
-        link(create_as, group_i, parent_i, name)
+        if not parent_node.encrypt:
+            link(create_as, group_i, parent_i, name)
+        else:
+            link(create_as, group_i, parent_i, name, symm_key)
         return group_i
-    link(create_as, i, parent_i, name)
+    if not parent_node.encrypt:
+        link(create_as, i, parent_i, name)
+    else:
+        link(create_as, i, parent_i, name, symm_key)
     return i
     # return I(User(0), 0)
 
-def create(parent_i, name, create_as, create_for, encrypted=False):
+def create(parent_i, name, create_as, create_for, encrypted=False, symm_key=None):
     """
     Create a new file.
     See secfs.fs._create
     """
-    return _create(parent_i, name, create_as, create_for, False, encrypted=False)
+    return _create(parent_i, name, create_as, create_for, False, encrypted=False, symm_key=symm_key)
 
-def mkdir(parent_i, name, create_as, create_for, encrypted=False):
+def mkdir(parent_i, name, create_as, create_for, encrypted=False, symm_key=None):
     """
     Create a new directory.
     See secfs.fs._create
     """
-    return _create(parent_i, name, create_as, create_for, True, encrypted=False)
+    return _create(parent_i, name, create_as, create_for, True, encrypted=False, symm_key=symm_key)
 
 def read(read_as, i, off, size, decryption_key=None):
     """
@@ -178,12 +191,14 @@ def read(read_as, i, off, size, decryption_key=None):
             raise PermissionError("cannot read from user-readable file {0} as {1}".format(i, read_as))
 
     node = get_inode(i)
+
+    # sanity check...
     if node.encrypt and not decryption_key:
         raise PermissionError("cannot read encrypted file {0} as {1} without decryption key".format(i, write_as))
 
     contents = node.read()
     #Decrypt the file if necessary
-    if node.encrypt:
+    if node.encrypt and len(a) > 0:
         contents = secfs.crypto.decrypt_sym(decryption_key, contents)
 
     return contents[off:off+size]
@@ -204,9 +219,11 @@ def write(write_as, i, off, buf, encryption_key=None):
             raise PermissionError("cannot write to user-owned file {0} as {1}".format(i, write_as))
 
     node = get_inode(i)
+    old_hash = secfs.tables.resolve(i)
+
+    # sanity check...
     if node.encrypt and not encryption_key:
         raise PermissionError("cannot write to encrypted file {0} as {1} without encryption key".format(i, write_as))
-
 
     # TODO: this is obviously stupid -- should not get rid of blocks that haven't changed
     bts = node.read()
@@ -214,7 +231,8 @@ def write(write_as, i, off, buf, encryption_key=None):
     #Decrpyt the data if necessary
     if node.encrypt and len(bts) > 0:
         #First need to decrypt the file
-        bts = secfs.crypto.decrpyt_sym(encryption_key, bts) 
+        bts = secfs.crypto.decrpyt_sym(encryption_key, bts)
+
     # write also allows us to extend a file
     if off + len(buf) > len(bts):
         bts = bts[:off] + buf
@@ -225,6 +243,7 @@ def write(write_as, i, off, buf, encryption_key=None):
     #Encrpyt data if necessary
     if node.encrypt:
         bts = secfs.crypto.encrypt_sym(encryption_key, bts)
+
     # update the inode
     node.blocks = [secfs.store.block.store(bts)]
     node.mtime = time.time()
@@ -233,22 +252,29 @@ def write(write_as, i, off, buf, encryption_key=None):
     # put new hash in tree
     new_hash = secfs.store.block.store(node.bytes())
     secfs.tables.modmap(write_as, i, new_hash)
+    if new_hash != old_hash:
+        global server
+        server.free(old_hash)
 
     return len(buf)
 
-def readdir(i, off):
+def readdir(i, off, read_as, symm_key=None):
     """
     Return a list of is in the directory at i.
     Each returned list item is a tuple of an i and an index. The index can be
     used to request a suffix of the list at a later time.
     """
-    dr = Directory(i)
+    # Might break here...?
+    if not secfs.access.can_read(read_as, i):
+        raise PermissionError("fuuuuuuuck")
+    
+    dr = Directory(i, symm_key=symm_key)
     if dr == None:
         return None
 
     return [(i, index+1) for index, i in enumerate(dr.children) if index >= off]
 
-def link(link_as, i, parent_i, name):
+def link(link_as, i, parent_i, name, symm_key=None):
     """
     Adds the given i into the given parent directory under the given name.
     """
@@ -264,5 +290,16 @@ def link(link_as, i, parent_i, name):
         else:
             raise PermissionError("cannot create in user-writeable directory {0} as {1}".format(parent_i, link_as))
 
-    parent_ihash = secfs.store.tree.add(parent_i, name, i)
-    secfs.tables.modmap(link_as, parent_i, parent_ihash)
+    ## TODO izzy delete this
+    ## parent_ihash = secfs.store.tree.add(parent_i, name, i)
+    ## secfs.tables.modmap(link_as, parent_i, parent_ihash)
+    node = get_inode(parent_i)
+    if not node.encrypt:
+        parent_ihash = secfs.store.tree.add(parent_i, name, i)
+        secfs.tables.modmap(link_as, parent_i, parent_ihash)
+    else:
+        if not secfs.access.can_write(link_as, i):
+            raise PermissionError("trying to modify directory without permission")
+        else:
+            parent_ihash = secfs.store.tree.add(parent_i, name, i, symm_key=symm_key)
+            secfs.tables.modmap(link_as, parent_i, parent_ihash)

@@ -17,6 +17,8 @@ current_itables = {}
 # The VSL will be downloaded from the server, modified and sent back to support
 # multiple users
 vsl = None
+signed_vsl = None
+curr_user = None
 
 # a server connection handle is passed to us at mount time by secfs-fuse
 server = None
@@ -29,21 +31,29 @@ def pre(refresh, user):
     Called before all user file system operations, right after we have obtained
     an exclusive server lock.
     """
+    global curr_user
+    curr_user = user
 
     # Firt retrieve the VSL from the server
     global vsl
-    vsl = server.retrieve_VSL()
+    encoded_pickled_vsl = server.retrieve_VSL()
 
-    if vsl == None: #or raw_vsl == {}:
+    if vsl == None or len(encoded_pickled_vsl) == 0: #or raw_vsl == {}:
         # We're the first user to edit the fs
         # Need to create the VS
-        vsl = VSL()
-        secfs.fs.root_i = I(user, inumber = 0)
+        vsl = VSL(user)
+        global signed_vsl
+        signed_vsl = VSL(user)
+        # secfs.fs.root_i = I(user, inumber = 0)
         return
 
     # decode vsl and get to sensible format
-    vsl = base64.b64decode(vsl["data"])
-    vsl = pickle.loads(vsl)
+    pickled_vsl = base64.b64decode(encoded_pickled_vsl["data"])
+
+    global signed_vsl
+    signed_vsl = pickle.loads(pickled_vsl)
+    global vsl
+    vsl = signed_vsl.generateUnsignedVSL()
 
     # Load user I-tables into current i-tables list
     global current_itables
@@ -52,10 +62,25 @@ def pre(refresh, user):
         current_itables[user] = Itable.load(vs.ihandle)
 
     # Load group I-tables into current i-tables list
+    ## TODO izzy fuuuuck what is happening
     handles = vsl.find_group_versions()
     for g in handles:
         current_itables[g] = Itable.load(handles[g])
-
+    '''
+    best_group_version, best_group_hash = {}, {}
+    for vs in vsl.vsl.values():
+        for group in vs.group_ihandles.keys():
+            group_ihandle = vs.group_ihandles[group]
+            group_version = vs.version_vector[group]
+            if group not in best_group_version or group_version > best_group_version[group]:
+                best_group_version[group] = group_version
+                best_group_hash[group] = group_ihandle
+    for group in best_group_hash.keys():
+        group_hash = best_group_hash[group]
+        current_itables[group] = Itable.load(group_hash)
+    '''
+    # secfs.fs.root_i = I(vsl.root, inumber=0)
+    
     if refresh != None:
         # refresh usermap and groupmap
         refresh()
@@ -68,7 +93,12 @@ def post(push_vs):
         return
     
     global vsl
-    pickled = pickle.dumps(vsl)
+    global signed_vsl
+    global curr_user
+    if curr_user in vsl.vsl:
+        signed_vsl.updateSignedVSL(curr_user, vsl.vsl[curr_user])
+    
+    pickled = pickle.dumps(signed_vsl)
     server.update_VSL(pickled)
 
 class Itable:
@@ -92,7 +122,7 @@ class Itable:
     def bytes(self):
         return pickle.dumps(self.mapping)
 
-def resolve(i, resolve_groups = True):
+def resolve(i, resolve_groups=True):
     """
     Resolve the given i into an inode hash. If resolve_groups is not set, group
     is will only be resolved to their user i, but not further.
